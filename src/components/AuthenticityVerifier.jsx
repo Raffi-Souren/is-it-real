@@ -82,7 +82,6 @@ export default function AuthenticityVerifier() {
       setError('Please enter an image URL');
       return;
     }
-    setLoading(true);
     setError(null);
     setResult(null);
     setFile(null);
@@ -92,9 +91,7 @@ export default function AuthenticityVerifier() {
     if (imageFile) {
       setFile(imageFile);
       setPreview(URL.createObjectURL(imageFile));
-      // The verify function will be triggered by the state update in a useEffect
-    } else {
-      setLoading(false);
+      // The verify function will be triggered by the useEffect
     }
   };
 
@@ -118,12 +115,11 @@ export default function AuthenticityVerifier() {
   };
 
   // Run verification pipeline with robust error handling for mobile
-  const verify = async () => {
+  const verify = useCallback(async () => {
     if (!file) return;
 
     setLoading(true);
     setError(null);
-    setResult(null);
 
     try {
       // Stage 1: Provenance check
@@ -204,7 +200,7 @@ export default function AuthenticityVerifier() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [file]);
 
   // Reset state
   const reset = () => {
@@ -222,7 +218,7 @@ export default function AuthenticityVerifier() {
     if (file && !result && !loading) {
       verify();
     }
-  }, [file, result, loading]);
+  }, [file, result, loading, verify]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 min-h-screen">
