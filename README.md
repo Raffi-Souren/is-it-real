@@ -1,0 +1,105 @@
+# Is It Real?
+
+**Multi-signal authenticity verification for images and text.**
+
+Provenance-first architecture with ensemble AI detection. Built on principles from LLM Output Drift research (arXiv:2511.07585).
+
+## Features
+
+- **Image Verification**: Deepfake detection via Hive AI, SightEngine
+- **Text Verification**: AI-generated text detection via GPTZero, Originality.AI
+- **Provenance-First**: C2PA Content Credentials check before probabilistic detection
+- **Ensemble Scoring**: Multiple detectors with variance-based confidence
+- **Heuristics**: No-API pattern analysis for both images and text
+
+## Why Multi-Signal?
+
+**The Problem:**
+- 120B parameter models show only 12.5% output consistency
+- Single detectors suffer from the same stochastic behavior they detect
+- No audit trail for enterprise compliance
+
+**The Solution:**
+- Provenance-first: C2PA credentials (cryptographic) override detection
+- Ensemble detection: Multiple specialized detectors
+- Variance tracking: High disagreement flags for manual review
+
+## Quick Start
+
+```bash
+# Clone
+git clone https://github.com/Raffi-Souren/is-it-real
+cd is-it-real
+
+# Install
+npm install
+
+# Set up API keys
+cp .env.example .env
+# Edit .env with your keys
+
+# Run
+npm run dev
+```
+
+## API Keys
+
+| Service | Type | Pricing | Link |
+|---------|------|---------|------|
+| Hive AI | Image | Free tier | [thehive.ai](https://thehive.ai) |
+| SightEngine | Image | 2,000 free/mo | [sightengine.com](https://sightengine.com) |
+| GPTZero | Text | 10,000 words free/mo | [gptzero.me](https://gptzero.me) |
+| Originality.AI | Text | Pay-per-use | [originality.ai](https://originality.ai) |
+
+## Architecture
+
+```
+Input (Image or Text)
+        ↓
+┌───────────────────────────────┐
+│  PROVENANCE CHECK (Images)    │  ← C2PA/EXIF (free, instant)
+│  If valid → VERIFIED_AUTHENTIC│
+└───────────────────────────────┘
+        ↓ (if no provenance)
+┌───────────────────────────────┐
+│  ENSEMBLE DETECTION           │
+│  ┌─────────┬─────────────────┐│
+│  │ Image:  │ Text:           ││
+│  │ Hive    │ GPTZero         ││
+│  │ Sight   │ Originality     ││
+│  │ Engine  │ Heuristics      ││
+│  └─────────┴─────────────────┘│
+│  Weighted average + variance  │
+└───────────────────────────────┘
+        ↓
+┌───────────────────────────────┐
+│  VERDICT                      │
+│  AUTHENTIC | LIKELY_AUTHENTIC │
+│  UNCERTAIN | LIKELY_SYNTHETIC │
+│  INCONCLUSIVE (σ > 25)        │
+└───────────────────────────────┘
+```
+
+## Verdicts
+
+| Verdict | Condition | Action |
+|---------|-----------|--------|
+| `VERIFIED_AUTHENTIC` | C2PA valid | TRUST |
+| `LIKELY_AUTHENTIC` | Score < 30%, σ < 15 | LOW RISK |
+| `UNCERTAIN` | Score 30-70% OR σ 15-25 | REVIEW |
+| `LIKELY_SYNTHETIC` | Score > 70%, σ < 15 | CAUTION |
+| `INCONCLUSIVE` | σ > 25 | MANUAL REVIEW |
+
+## Research Connection
+
+Based on:
+- **LLM Output Drift v2** (arXiv:2511.07585): Why single-model approaches fail
+- **C2PA Standard**: [c2pa.org](https://c2pa.org)
+
+## License
+
+MIT
+
+---
+
+Built with provenance-first principles. No single-model dependency.
