@@ -1,7 +1,7 @@
 /**
  * AuthenticityVerifier - Main Component
  *
- * Drag-and-drop media verification with provenance-first architecture.
+ * Drag-and-drop and URL-based media verification with provenance-first architecture.
  * Shows multi-signal scores and audit trail.
  *
  * @author Raf Khatchadourian
@@ -30,6 +30,7 @@ export default function AuthenticityVerifier() {
   const [stage, setStage] = useState('idle'); // idle, provenance, detection, complete
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
 
   // Handle file drop
   const handleDrop = useCallback((e) => {
@@ -48,7 +49,54 @@ export default function AuthenticityVerifier() {
     setPreview(URL.createObjectURL(droppedFile));
     setResult(null);
     setError(null);
+    setImageUrl(''); // Clear URL input
   }, []);
+
+  // Handle URL input change
+  const handleUrlChange = (e) => {
+    setImageUrl(e.target.value);
+    setError(null);
+  };
+
+  // Fetch image from URL and convert to File object
+  const fetchImageAsFile = async (url) => {
+    try {
+      // Use our CORS proxy to fetch the image
+      const response = await fetch(`/api/cors-proxy?url=${encodeURIComponent(url)}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
+      }
+      const blob = await response.blob();
+      const fileName = url.substring(url.lastIndexOf('/') + 1) || 'image.jpg';
+      return new File([blob], fileName, { type: blob.type });
+    } catch (err) {
+      console.error('Fetch image error:', err);
+      setError(`Could not load image from URL. It may be private or invalid. Details: ${err.message}`);
+      return null;
+    }
+  };
+
+  // Handle verification from URL
+  const handleUrlVerify = async () => {
+    if (!imageUrl) {
+      setError('Please enter an image URL');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setFile(null);
+    setPreview(null);
+
+    const imageFile = await fetchImageAsFile(imageUrl);
+    if (imageFile) {
+      setFile(imageFile);
+      setPreview(URL.createObjectURL(imageFile));
+      // The verify function will be triggered by the state update in a useEffect
+    } else {
+      setLoading(false);
+    }
+  };
 
   // Prevent default drag behavior
   const handleDragOver = useCallback((e) => {
@@ -166,7 +214,15 @@ export default function AuthenticityVerifier() {
     setResult(null);
     setError(null);
     setStage('idle');
+    setImageUrl('');
   };
+
+  // Automatically trigger verify when a file is set (either from drop or URL)
+  React.useEffect(() => {
+    if (file && !result && !loading) {
+      verify();
+    }
+  }, [file, result, loading]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 min-h-screen">
@@ -201,39 +257,65 @@ export default function AuthenticityVerifier() {
         </p>
       </header>
 
-      {/* Drop Zone */}
+      {/* Input Area */}
       {!file && (
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer"
-        >
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleDrop}
-            className="hidden"
-            id="file-input"
-          />
-          <label htmlFor="file-input" className="cursor-pointer">
-            <div className="text-gray-500">
-              <svg
-                className="mx-auto h-12 w-12 mb-4"
-                stroke="currentColor"
-                fill="none"
-                viewBox="0 0 48 48"
-              >
-                <path
-                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <p className="text-lg mb-2">Drop an image here or click to upload</p>
-              <p className="text-sm">PNG, JPG, WebP supported</p>
-            </div>
-          </label>
+        <div className="space-y-4">
+          {/* Drop Zone */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer"
+          >
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleDrop}
+              className="hidden"
+              id="file-input"
+            />
+            <label htmlFor="file-input" className="cursor-pointer">
+              <div className="text-gray-500">
+                <svg
+                  className="mx-auto h-12 w-12 mb-4"
+                  stroke="currentColor"
+                  fill="none"
+                  viewBox="0 0 48 48"
+                >
+                  <path
+                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <p className="text-lg mb-2">Drop an image here or click to upload</p>
+                <p className="text-sm">PNG, JPG, WebP supported</p>
+              </div>
+            </label>
+          </div>
+
+          {/* URL Input */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={imageUrl}
+              onChange={handleUrlChange}
+              placeholder="Or paste an image URL here"
+              className="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+            <button
+              onClick={handleUrlVerify}
+              disabled={loading || !imageUrl}
+              className={`py-3 px-6 rounded-lg font-medium text-white transition-colors ${
+                loading || !imageUrl
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              Verify URL
+            </button>
+          </div>
         </div>
       )}
 
@@ -267,18 +349,19 @@ export default function AuthenticityVerifier() {
             <span>{file.type}</span>
           </div>
 
-          {/* Verify Button */}
-          {!result && (
-            <button
-              onClick={verify}
-              disabled={loading}
-              className={`w-full py-3 px-6 rounded-lg font-medium text-white transition-colors ${
-                loading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-            >
-              {loading ? (
+          {/* Verify Button (now hidden, verification is automatic) */}
+          {/* ... */}
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+
+          {/* Loading Indicator */}
+          {loading && (
+             <div className="w-full py-3 px-6 rounded-lg font-medium text-white bg-gray-400 cursor-not-allowed">
                 <span className="flex items-center justify-center">
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -286,17 +369,7 @@ export default function AuthenticityVerifier() {
                   </svg>
                   {stage === 'provenance' ? 'Checking provenance...' : 'Running detection...'}
                 </span>
-              ) : (
-                'Verify Authenticity'
-              )}
-            </button>
-          )}
-
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-              <strong>Error:</strong> {error}
-            </div>
+              </div>
           )}
 
           {/* Results */}
