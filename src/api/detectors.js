@@ -7,10 +7,10 @@
  * @author Raf Khatchadourian
  */
 
-// API endpoints
+// API endpoints - using serverless proxies to avoid CORS
 const ENDPOINTS = {
-  HIVE: 'https://api.thehive.ai/api/v2/task/sync',
-  SIGHTENGINE: 'https://api.sightengine.com/1.0/check.json'
+  HIVE: '/api/hive',
+  SIGHTENGINE: '/api/sightengine'
 };
 
 /**
@@ -22,54 +22,27 @@ const ENDPOINTS = {
  * @returns {Object} Detection result
  */
 export async function detectWithHive(imageUrl, apiKey) {
-  if (!apiKey) {
-    return {
-      source: 'hive',
-      score: null,
-      confidence: 0,
-      error: 'API key not configured',
-      metadata: {}
-    };
-  }
-
+  // API key check no longer needed - handled by serverless function
   try {
     const response = await fetch(ENDPOINTS.HIVE, {
       method: 'POST',
       headers: {
-        'Authorization': `Token ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        url: imageUrl,
-        models: ['ai_generated_image', 'deepfake']
-      })
+      body: JSON.stringify({ imageUrl })
     });
-
-    if (!response.ok) {
-      throw new Error(`Hive API error: ${response.status}`);
-    }
 
     const data = await response.json();
 
-    // Extract AI-generated score
-    const aiGenerated = data.status?.[0]?.response?.ai_generated_image;
-    const deepfake = data.status?.[0]?.response?.deepfake;
-
-    // Combine scores (higher of the two)
-    const aiScore = aiGenerated?.classes?.find(c => c.class === 'ai_generated')?.score || 0;
-    const deepfakeScore = deepfake?.classes?.find(c => c.class === 'yes_deepfake')?.score || 0;
-    const combinedScore = Math.max(aiScore, deepfakeScore) * 100;
+    if (!response.ok) {
+      throw new Error(data.error || `Hive API error: ${response.status}`);
+    }
 
     return {
       source: 'hive',
-      score: combinedScore,
-      confidence: data.status?.[0]?.response?.confidence || 0.85,
-      metadata: {
-        aiGeneratedScore: aiScore * 100,
-        deepfakeScore: deepfakeScore * 100,
-        model: aiGenerated?.model || 'unknown',
-        rawResponse: data
-      }
+      score: data.score,
+      confidence: data.confidence || 0.85,
+      metadata: data.metadata || {}
     };
   } catch (error) {
     console.error('Hive detection error:', error);
@@ -93,48 +66,27 @@ export async function detectWithHive(imageUrl, apiKey) {
  * @returns {Object} Detection result
  */
 export async function detectWithSightEngine(imageUrl, apiUser, apiSecret) {
-  if (!apiUser || !apiSecret) {
-    return {
-      source: 'sightengine',
-      score: null,
-      confidence: 0,
-      error: 'API credentials not configured',
-      metadata: {}
-    };
-  }
-
+  // API credentials check no longer needed - handled by serverless function
   try {
-    const params = new URLSearchParams({
-      url: imageUrl,
-      models: 'genai',
-      api_user: apiUser,
-      api_secret: apiSecret
+    const response = await fetch(ENDPOINTS.SIGHTENGINE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ imageUrl })
     });
-
-    const response = await fetch(`${ENDPOINTS.SIGHTENGINE}?${params}`, {
-      method: 'GET'
-    });
-
-    if (!response.ok) {
-      throw new Error(`SightEngine API error: ${response.status}`);
-    }
 
     const data = await response.json();
 
-    // Extract AI-generated score (0-1, convert to 0-100)
-    const aiScore = (data.type?.ai_generated || 0) * 100;
+    if (!response.ok) {
+      throw new Error(data.error || `SightEngine API error: ${response.status}`);
+    }
 
     return {
       source: 'sightengine',
-      score: aiScore,
-      confidence: 0.90, // SightEngine typically high confidence
-      metadata: {
-        mediaType: data.media?.type,
-        rawScore: data.type?.ai_generated,
-        photoScore: data.type?.photo,
-        illustrationScore: data.type?.illustration,
-        rawResponse: data
-      }
+      score: data.score,
+      confidence: data.confidence || 0.90,
+      metadata: data.metadata || {}
     };
   } catch (error) {
     console.error('SightEngine detection error:', error);

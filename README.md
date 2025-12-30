@@ -2,7 +2,14 @@
 
 **Multi-signal authenticity verification for images and text.**
 
+[![Live Demo](https://img.shields.io/badge/demo-live-green)](https://is-it-real.vercel.app)
+[![arXiv](https://img.shields.io/badge/arXiv-2511.07585-b31b1b)](https://arxiv.org/abs/2511.07585)
+
+**[Try the Live Demo](https://is-it-real.vercel.app)**
+
 Provenance-first architecture with ensemble AI detection. Built on principles from LLM Output Drift research (arXiv:2511.07585).
+
+> **Disclaimer:** This tool provides probabilistic assessments, not definitive verdicts. AI detection is inherently uncertain—use results as one signal among many, not as absolute proof. Always apply human judgment for high-stakes decisions.
 
 ## Features
 

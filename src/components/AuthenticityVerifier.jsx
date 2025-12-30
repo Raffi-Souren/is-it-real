@@ -147,6 +147,18 @@ export default function AuthenticityVerifier() {
           >
             Based on LLM Output Drift research
           </a>
+          {' | '}
+          <a
+            href="https://github.com/Raffi-Souren/is-it-real"
+            className="text-blue-600 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+        </p>
+        <p className="text-xs text-gray-500 mt-2">
+          Results are probabilistic, not definitive. Use as one signal among many for high-stakes decisions.
         </p>
       </header>
 
