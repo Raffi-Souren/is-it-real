@@ -14,11 +14,14 @@
  */
 
 // Detector weights (calibrated based on accuracy/reliability)
+// Updated 2025-12-30: Simplified - Vision Council is primary, others validate
+// When Vision Council has high confidence, it's weighted heavily
 export const DETECTOR_WEIGHTS = {
-  hive: 0.30,           // Specialized deepfake detection
-  sightengine: 0.25,    // Multi-model ensemble
-  illuminarty: 0.25,    // Academic partnerships
-  heuristics: 0.20      // Compression artifact analysis
+  vision_council: 0.50, // LLM Vision analysis - PRIMARY (Gemini 2.0 Flash)
+  hive: 0.20,           // Specialized deepfake detection
+  sightengine: 0.15,    // Multi-model ensemble
+  heuristics: 0.10,     // Metadata & artifact analysis
+  illuminarty: 0.05     // Academic partnerships (usually unavailable)
 };
 
 // Verdict thresholds
@@ -91,13 +94,27 @@ export function calculateEnsembleScore(results) {
     };
   }
 
+  // Check if Vision Council has a high-confidence strong signal
+  const visionCouncil = available.find(r => r.source === 'vision_council');
+  const visionIsConfident = visionCouncil &&
+    visionCouncil.confidence >= 0.80 &&
+    (visionCouncil.score >= 75 || visionCouncil.score <= 25);
+
   // Calculate weighted sum
   let weightedSum = 0;
   let totalWeight = 0;
   const scores = [];
 
   for (const result of available) {
-    const weight = DETECTOR_WEIGHTS[result.source] || 0.10; // Default weight for unknown
+    let weight = DETECTOR_WEIGHTS[result.source] || 0.10;
+
+    // If Vision Council is highly confident, boost its weight further
+    if (visionIsConfident && result.source === 'vision_council') {
+      weight = 0.70; // Dominant weight when confident
+    } else if (visionIsConfident) {
+      weight = weight * 0.5; // Reduce other weights when Vision Council is confident
+    }
+
     weightedSum += result.score * weight;
     totalWeight += weight;
     scores.push(result.score);
@@ -113,25 +130,38 @@ export function calculateEnsembleScore(results) {
   // High variance = low confidence (detectors disagree)
   const confidence = Math.max(0, 1 - (variance / 50));
 
+  // Build audit with actual weights used
+  const auditDetectors = available.map(r => {
+    let actualWeight = DETECTOR_WEIGHTS[r.source] || 0.10;
+    if (visionIsConfident && r.source === 'vision_council') {
+      actualWeight = 0.70;
+    } else if (visionIsConfident) {
+      actualWeight = actualWeight * 0.5;
+    }
+    return {
+      source: r.source,
+      score: r.score,
+      weight: Math.round(actualWeight * 100) / 100,
+      confidence: r.confidence,
+      metadata: r.metadata
+    };
+  });
+
   return {
     score: Math.round(ensembleScore * 100) / 100,
     variance: Math.round(variance * 100) / 100,
     confidence: Math.round(confidence * 100) / 100,
     availableDetectors: available.length,
+    visionCouncilDominant: visionIsConfident,
     audit: {
       timestamp: new Date().toISOString(),
-      detectors: available.map(r => ({
-        source: r.source,
-        score: r.score,
-        weight: DETECTOR_WEIGHTS[r.source] || 0.10,
-        confidence: r.confidence,
-        metadata: r.metadata
-      })),
+      detectors: auditDetectors,
       weights: DETECTOR_WEIGHTS,
       calculation: {
         weightedSum,
         totalWeight,
-        normalizedScore: ensembleScore
+        normalizedScore: ensembleScore,
+        visionCouncilBoosted: visionIsConfident
       }
     }
   };

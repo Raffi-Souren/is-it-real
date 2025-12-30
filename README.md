@@ -13,7 +13,8 @@ Provenance-first architecture with ensemble AI detection. Built on principles fr
 
 ## Features
 
-- **Image Verification**: Deepfake detection via Hive AI, SightEngine
+- **Image Verification**: Deepfake detection via Hive AI, SightEngine, Vision LLM Council
+- **Vision LLM Council**: Uses vision-capable LLMs (Gemini 2.0 Flash) to analyze images for AI artifacts - inspired by [LLM Council](https://github.com/karpathy/llm-council) approach
 - **Text Verification**: AI-generated text detection via GPTZero, Originality.AI
 - **Provenance-First**: C2PA Content Credentials check before probabilistic detection
 - **Ensemble Scoring**: Multiple detectors with variance-based confidence
@@ -53,6 +54,7 @@ npm run dev
 
 | Service | Type | Pricing | Link |
 |---------|------|---------|------|
+| **Gemini** | Image (Vision Council) | **FREE** 1,500/day | [aistudio.google.com](https://aistudio.google.com/apikey) |
 | Hive AI | Image | Free tier | [thehive.ai](https://thehive.ai) |
 | SightEngine | Image | 2,000 free/mo | [sightengine.com](https://sightengine.com) |
 | GPTZero | Text | 10,000 words free/mo | [gptzero.me](https://gptzero.me) |
@@ -70,12 +72,15 @@ Input (Image or Text)
         ↓ (if no provenance)
 ┌───────────────────────────────┐
 │  ENSEMBLE DETECTION           │
-│  ┌─────────┬─────────────────┐│
-│  │ Image:  │ Text:           ││
-│  │ Hive    │ GPTZero         ││
-│  │ Sight   │ Originality     ││
-│  │ Engine  │ Heuristics      ││
-│  └─────────┴─────────────────┘│
+│  ┌─────────────┬─────────────┐│
+│  │ Image:      │ Text:       ││
+│  │ Hive AI     │ GPTZero     ││
+│  │ SightEngine │ Originality ││
+│  │ Vision LLM  │ Heuristics  ││
+│  │ Council*    │             ││
+│  │ Heuristics  │             ││
+│  └─────────────┴─────────────┘│
+│  *Uses Gemini 2.0 Flash (FREE)│
 │  Weighted average + variance  │
 └───────────────────────────────┘
         ↓

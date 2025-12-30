@@ -69,7 +69,7 @@ export default function AuthenticityVerifier() {
     });
   };
 
-  // Run verification pipeline
+  // Run verification pipeline with robust error handling for mobile
   const verify = async () => {
     if (!file) return;
 
@@ -80,7 +80,18 @@ export default function AuthenticityVerifier() {
     try {
       // Stage 1: Provenance check
       setStage('provenance');
-      const provenanceResult = await checkProvenance(file);
+      let provenanceResult;
+      try {
+        provenanceResult = await checkProvenance(file);
+      } catch (provErr) {
+        console.error('Provenance check failed:', provErr);
+        // Continue with default provenance result
+        provenanceResult = {
+          hasVerifiedProvenance: false,
+          c2pa: null,
+          imageData: { width: 0, height: 0, exif: {} }
+        };
+      }
 
       // If valid C2PA credentials, we can skip detection
       if (provenanceResult.hasVerifiedProvenance) {
@@ -102,15 +113,28 @@ export default function AuthenticityVerifier() {
       setStage('detection');
 
       // Convert file to base64 for API calls (works on mobile)
-      const imageBase64 = await fileToBase64(file);
+      let imageBase64;
+      try {
+        imageBase64 = await fileToBase64(file);
+      } catch (b64Err) {
+        console.error('Base64 conversion failed:', b64Err);
+        throw new Error('Failed to process image. Try a smaller file.');
+      }
 
       // Run all detectors in parallel with base64 data
-      const detectorResults = await runAllDetectors(
-        null, // No URL needed when using base64
-        provenanceResult.imageData,
-        API_KEYS,
-        imageBase64
-      );
+      let detectorResults;
+      try {
+        detectorResults = await runAllDetectors(
+          null, // No URL needed when using base64
+          provenanceResult.imageData,
+          API_KEYS,
+          imageBase64
+        );
+      } catch (detectErr) {
+        console.error('Detection failed:', detectErr);
+        // Use empty results to still show a verdict
+        detectorResults = [];
+      }
 
       // Stage 3: Calculate verdict
       const finalResult = verifyContent(
@@ -127,7 +151,7 @@ export default function AuthenticityVerifier() {
 
     } catch (err) {
       console.error('Verification error:', err);
-      setError(err.message || 'Verification failed');
+      setError(err.message || 'Verification failed. Please try again.');
       setStage('idle');
     } finally {
       setLoading(false);
@@ -145,7 +169,7 @@ export default function AuthenticityVerifier() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6 min-h-screen">
       {/* Header */}
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -316,7 +340,8 @@ export default function AuthenticityVerifier() {
         <h3 className="font-medium text-gray-700 mb-2">How it works</h3>
         <ol className="list-decimal list-inside space-y-1">
           <li><strong>Provenance First:</strong> Check for C2PA Content Credentials (cryptographic proof)</li>
-          <li><strong>Ensemble Detection:</strong> If no credentials, run multiple AI detectors in parallel</li>
+          <li><strong>Ensemble Detection:</strong> Hive AI, SightEngine, Vision LLM Council, and heuristics</li>
+          <li><strong>Vision LLM Council:</strong> Uses Gemini 2.0 Flash to analyze images for AI artifacts</li>
           <li><strong>Weighted Scoring:</strong> Combine results with variance-based confidence</li>
           <li><strong>Audit Trail:</strong> Full transparency on all signals and decisions</li>
         </ol>
@@ -326,10 +351,10 @@ export default function AuthenticityVerifier() {
             LLM Output Drift v2
           </a>
           {' '}and{' '}
-          <a href="#" className="text-blue-600 hover:underline">
-            Replayable Agents
+          <a href="https://github.com/karpathy/llm-council" className="text-blue-600 hover:underline">
+            LLM Council
           </a>
-          {' '}research.
+          {' '}approaches.
         </p>
       </footer>
     </div>

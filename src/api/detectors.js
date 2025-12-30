@@ -10,7 +10,8 @@
 // API endpoints - using serverless proxies to avoid CORS
 const ENDPOINTS = {
   HIVE: '/api/hive',
-  SIGHTENGINE: '/api/sightengine'
+  SIGHTENGINE: '/api/sightengine',
+  VISION_COUNCIL: '/api/vision-council'
 };
 
 /**
@@ -374,6 +375,58 @@ export function analyzeTextHeuristics(text) {
 }
 
 /**
+ * Vision LLM Council Detection
+ * Uses vision-capable LLMs to analyze images for AI artifacts.
+ * Based on compliance_judge.py "LLM Council" pattern.
+ *
+ * @param {string} imageBase64 - Base64 encoded image
+ * @returns {Object} Detection result from vision models
+ */
+export async function detectWithVisionCouncil(imageBase64) {
+  if (!imageBase64) {
+    return {
+      source: 'vision_council',
+      score: null,
+      confidence: 0,
+      error: 'No image data provided',
+      metadata: {}
+    };
+  }
+
+  try {
+    const response = await fetch(ENDPOINTS.VISION_COUNCIL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ imageBase64 })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `Vision Council error: ${response.status}`);
+    }
+
+    return {
+      source: 'vision_council',
+      score: data.score,
+      confidence: data.confidence || 0.80,
+      metadata: data.metadata || {}
+    };
+  } catch (error) {
+    console.error('Vision Council detection error:', error);
+    return {
+      source: 'vision_council',
+      score: null,
+      confidence: 0,
+      error: error.message,
+      metadata: {}
+    };
+  }
+}
+
+/**
  * Heuristic Analysis
  * Compression artifact and metadata analysis (no API required)
  *
@@ -480,6 +533,7 @@ export async function runAllDetectors(imageUrl, imageData, apiKeys = {}, imageBa
     detectWithHive(imageUrl, apiKeys.hive, imageBase64),
     detectWithSightEngine(imageUrl, apiKeys.sightengineUser, apiKeys.sightengineSecret, imageBase64),
     detectWithIlluminarty(imageUrl, apiKeys.illuminarty),
+    detectWithVisionCouncil(imageBase64),
     Promise.resolve(analyzeHeuristics(imageData))
   ]);
 
@@ -509,6 +563,7 @@ export default {
   detectWithHive,
   detectWithSightEngine,
   detectWithIlluminarty,
+  detectWithVisionCouncil,
   analyzeHeuristics,
   runAllDetectors,
   // Text detectors
