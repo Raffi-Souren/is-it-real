@@ -1,6 +1,7 @@
 /**
  * Vercel Serverless Function - Hive AI Proxy
  * Avoids CORS issues by calling Hive API from server-side
+ * Supports both URL and base64 image data
  */
 
 export default async function handler(req, res) {
@@ -16,10 +17,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { imageUrl } = req.body;
+    const { imageUrl, imageBase64 } = req.body;
 
-    if (!imageUrl) {
-      return res.status(400).json({ error: 'imageUrl required' });
+    let requestBody;
+
+    if (imageBase64) {
+      // Send base64 image data
+      requestBody = {
+        image: { base64: imageBase64 },
+        models: ['ai_generated_image', 'deepfake']
+      };
+    } else if (imageUrl && !imageUrl.startsWith('blob:')) {
+      // Use URL for public images
+      requestBody = {
+        url: imageUrl,
+        models: ['ai_generated_image', 'deepfake']
+      };
+    } else {
+      return res.status(400).json({ error: 'Valid imageUrl or imageBase64 required' });
     }
 
     const response = await fetch('https://api.thehive.ai/api/v2/task/sync', {
@@ -28,10 +43,7 @@ export default async function handler(req, res) {
         'Authorization': `Token ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        url: imageUrl,
-        models: ['ai_generated_image', 'deepfake']
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {

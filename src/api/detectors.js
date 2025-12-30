@@ -21,15 +21,19 @@ const ENDPOINTS = {
  * @param {string} apiKey - Hive API key
  * @returns {Object} Detection result
  */
-export async function detectWithHive(imageUrl, apiKey) {
+export async function detectWithHive(imageUrl, apiKey, imageBase64 = null) {
   // API key check no longer needed - handled by serverless function
   try {
+    const body = imageBase64
+      ? { imageBase64 }
+      : { imageUrl };
+
     const response = await fetch(ENDPOINTS.HIVE, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ imageUrl })
+      body: JSON.stringify(body)
     });
 
     const data = await response.json();
@@ -65,15 +69,19 @@ export async function detectWithHive(imageUrl, apiKey) {
  * @param {string} apiSecret - SightEngine API secret
  * @returns {Object} Detection result
  */
-export async function detectWithSightEngine(imageUrl, apiUser, apiSecret) {
+export async function detectWithSightEngine(imageUrl, apiUser, apiSecret, imageBase64 = null) {
   // API credentials check no longer needed - handled by serverless function
   try {
+    const body = imageBase64
+      ? { imageBase64 }
+      : { imageUrl };
+
     const response = await fetch(ENDPOINTS.SIGHTENGINE, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ imageUrl })
+      body: JSON.stringify(body)
     });
 
     const data = await response.json();
@@ -467,10 +475,10 @@ export function analyzeHeuristics(imageData) {
  * @param {Object} apiKeys - API credentials
  * @returns {Object[]} Array of detector results
  */
-export async function runAllDetectors(imageUrl, imageData, apiKeys = {}) {
+export async function runAllDetectors(imageUrl, imageData, apiKeys = {}, imageBase64 = null) {
   const results = await Promise.all([
-    detectWithHive(imageUrl, apiKeys.hive),
-    detectWithSightEngine(imageUrl, apiKeys.sightengineUser, apiKeys.sightengineSecret),
+    detectWithHive(imageUrl, apiKeys.hive, imageBase64),
+    detectWithSightEngine(imageUrl, apiKeys.sightengineUser, apiKeys.sightengineSecret, imageBase64),
     detectWithIlluminarty(imageUrl, apiKeys.illuminarty),
     Promise.resolve(analyzeHeuristics(imageData))
   ]);

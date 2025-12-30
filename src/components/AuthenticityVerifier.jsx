@@ -55,6 +55,20 @@ export default function AuthenticityVerifier() {
     e.preventDefault();
   }, []);
 
+  // Convert file to base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Run verification pipeline
   const verify = async () => {
     if (!file) return;
@@ -87,14 +101,15 @@ export default function AuthenticityVerifier() {
       // Stage 2: Run detection APIs
       setStage('detection');
 
-      // Create object URL for API calls
-      const imageUrl = preview;
+      // Convert file to base64 for API calls (works on mobile)
+      const imageBase64 = await fileToBase64(file);
 
-      // Run all detectors in parallel
+      // Run all detectors in parallel with base64 data
       const detectorResults = await runAllDetectors(
-        imageUrl,
+        null, // No URL needed when using base64
         provenanceResult.imageData,
-        API_KEYS
+        API_KEYS,
+        imageBase64
       );
 
       // Stage 3: Calculate verdict

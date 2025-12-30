@@ -1,6 +1,7 @@
 /**
  * Vercel Serverless Function - SightEngine Proxy
  * Avoids CORS issues by calling SightEngine API from server-side
+ * Supports both URL and base64 image data
  */
 
 export default async function handler(req, res) {
@@ -17,22 +18,40 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { imageUrl } = req.body;
+    const { imageUrl, imageBase64 } = req.body;
 
-    if (!imageUrl) {
-      return res.status(400).json({ error: 'imageUrl required' });
+    let response;
+
+    if (imageBase64) {
+      // Send base64 image data via POST
+      const formData = new URLSearchParams();
+      formData.append('media', imageBase64);
+      formData.append('models', 'genai');
+      formData.append('api_user', apiUser);
+      formData.append('api_secret', apiSecret);
+
+      response = await fetch('https://api.sightengine.com/1.0/check.json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData.toString()
+      });
+    } else if (imageUrl && !imageUrl.startsWith('blob:')) {
+      // Use URL method for public URLs
+      const params = new URLSearchParams({
+        url: imageUrl,
+        models: 'genai',
+        api_user: apiUser,
+        api_secret: apiSecret
+      });
+
+      response = await fetch(`https://api.sightengine.com/1.0/check.json?${params}`, {
+        method: 'GET'
+      });
+    } else {
+      return res.status(400).json({ error: 'Valid imageUrl or imageBase64 required' });
     }
-
-    const params = new URLSearchParams({
-      url: imageUrl,
-      models: 'genai',
-      api_user: apiUser,
-      api_secret: apiSecret
-    });
-
-    const response = await fetch(`https://api.sightengine.com/1.0/check.json?${params}`, {
-      method: 'GET'
-    });
 
     if (!response.ok) {
       const errorText = await response.text();
