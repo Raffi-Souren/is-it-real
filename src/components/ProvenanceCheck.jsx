@@ -141,8 +141,12 @@ export default function ProvenanceCheck({ provenance }) {
                   <div className="col-span-2">
                     <span className="text-gray-500">Location:</span>
                     <span className="ml-2">
-                      {exif.metadata.location.latitude.toFixed(4)},
-                      {exif.metadata.location.longitude.toFixed(4)}
+                      {typeof exif.metadata.location.latitude === 'number'
+                        ? exif.metadata.location.latitude.toFixed(4)
+                        : exif.metadata.location.latitude},
+                      {typeof exif.metadata.location.longitude === 'number'
+                        ? exif.metadata.location.longitude.toFixed(4)
+                        : exif.metadata.location.longitude}
                     </span>
                   </div>
                 )}

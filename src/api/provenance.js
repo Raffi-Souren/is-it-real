@@ -110,6 +110,30 @@ export async function verifyC2PA(file) {
 }
 
 /**
+ * Convert GPS coordinate to decimal format
+ * Handles various formats from EXIF: number, array [deg, min, sec], or object
+ *
+ * @param {*} coordinate - GPS coordinate in any format
+ * @returns {number|null} Decimal coordinate or null if invalid
+ */
+function convertGPSCoordinate(coordinate) {
+  // Already a number
+  if (typeof coordinate === 'number') {
+    return coordinate;
+  }
+
+  // Array format: [degrees, minutes, seconds]
+  if (Array.isArray(coordinate) && coordinate.length >= 2) {
+    const [deg, min = 0, sec = 0] = coordinate;
+    return deg + (min / 60) + (sec / 3600);
+  }
+
+  // Try to convert to number
+  const num = parseFloat(coordinate);
+  return isNaN(num) ? null : num;
+}
+
+/**
  * Extract EXIF metadata from image
  *
  * EXIF provides creation context but is NOT cryptographically secure.
@@ -162,6 +186,16 @@ export async function extractEXIF(file) {
       suspicionIndicators.push('ai_software');
     }
 
+    // Convert GPS coordinates to decimal format
+    let location = null;
+    if (exif.GPSLatitude !== undefined && exif.GPSLongitude !== undefined) {
+      const lat = convertGPSCoordinate(exif.GPSLatitude);
+      const lon = convertGPSCoordinate(exif.GPSLongitude);
+      if (lat !== null && lon !== null) {
+        location = { latitude: lat, longitude: lon };
+      }
+    }
+
     return {
       hasExif: true,
       metadata: {
@@ -174,10 +208,7 @@ export async function extractEXIF(file) {
           created: exif.DateTimeOriginal || exif.DateTime,
           modified: exif.DateTime
         },
-        location: exif.GPSLatitude ? {
-          latitude: exif.GPSLatitude,
-          longitude: exif.GPSLongitude
-        } : null,
+        location,
         image: {
           width: exif.ExifImageWidth || exif.ImageWidth,
           height: exif.ExifImageHeight || exif.ImageHeight,
