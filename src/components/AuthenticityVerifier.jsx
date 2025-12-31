@@ -23,6 +23,15 @@ const API_KEYS = {
   illuminarty: import.meta.env.VITE_ILLUMINARTY_API_KEY
 };
 
+// Mobile detection
+const isMobile = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+// File size limits (bytes)
+const MAX_FILE_SIZE_MOBILE = 5 * 1024 * 1024; // 5MB for mobile
+const MAX_FILE_SIZE_DESKTOP = 10 * 1024 * 1024; // 10MB for desktop
+
 export default function AuthenticityVerifier() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -31,11 +40,93 @@ export default function AuthenticityVerifier() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  // Global error handler for mobile
+  React.useEffect(() => {
+    const handleError = (event) => {
+      console.error('Global error:', event.error);
+      if (event.error?.message?.includes('memory') || event.error?.name === 'QuotaExceededError') {
+        setError('Out of memory. Please try a smaller image or close other apps/tabs.');
+        setLoading(false);
+        setIsCompressing(false);
+      }
+    };
+
+    const handleUnhandledRejection = (event) => {
+      console.error('Unhandled rejection:', event.reason);
+      if (event.reason?.message?.includes('memory') || event.reason?.name === 'QuotaExceededError') {
+        setError('Out of memory. Please try a smaller image or close other apps/tabs.');
+        setLoading(false);
+        setIsCompressing(false);
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // Compress/resize image for mobile compatibility
+  const compressImage = async (file, maxSizeMB = 2) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // Calculate new dimensions (max 1920px on longest side for mobile)
+          const maxDimension = isMobile() ? 1920 : 2560;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > maxDimension) {
+            height = (height * maxDimension) / width;
+            width = maxDimension;
+          } else if (height > maxDimension) {
+            width = (width * maxDimension) / height;
+            height = maxDimension;
+          }
+
+          // Create canvas and compress
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to blob with quality adjustment
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to compress image'));
+                return;
+              }
+              const compressedFile = new File([blob], file.name, {
+                type: file.type || 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            },
+            file.type || 'image/jpeg',
+            0.85 // Quality
+          );
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
 
   // Handle file drop
-  const handleDrop = useCallback((e) => {
+  const handleDrop = useCallback(async (e) => {
     e.preventDefault();
-    const droppedFile = e.dataTransfer?.files?.[0] || e.target?.files?.[0];
+    let droppedFile = e.dataTransfer?.files?.[0] || e.target?.files?.[0];
 
     if (!droppedFile) return;
 
@@ -43,6 +134,41 @@ export default function AuthenticityVerifier() {
     if (!droppedFile.type.startsWith('image/')) {
       setError('Please upload an image file (PNG, JPG, WebP)');
       return;
+    }
+
+    // Check file size and compress if needed
+    const maxSize = isMobile() ? MAX_FILE_SIZE_MOBILE : MAX_FILE_SIZE_DESKTOP;
+
+    if (droppedFile.size > maxSize) {
+      setIsCompressing(true);
+      setError(null);
+
+      try {
+        const compressed = await compressImage(droppedFile);
+
+        // Check if compression was successful
+        if (compressed.size > maxSize) {
+          setError(
+            `Image too large (${(droppedFile.size / 1024 / 1024).toFixed(1)}MB). ` +
+            `Please use an image smaller than ${maxSize / 1024 / 1024}MB. ` +
+            (isMobile() ? 'Mobile devices have memory limitations.' : '')
+          );
+          setIsCompressing(false);
+          return;
+        }
+
+        droppedFile = compressed;
+        console.log(`Compressed image from ${(droppedFile.size / 1024 / 1024).toFixed(1)}MB to ${(compressed.size / 1024 / 1024).toFixed(1)}MB`);
+      } catch (compressionError) {
+        console.error('Compression error:', compressionError);
+        setError(
+          `Image too large and compression failed. Please resize the image to under ${maxSize / 1024 / 1024}MB before uploading.`
+        );
+        setIsCompressing(false);
+        return;
+      }
+
+      setIsCompressing(false);
     }
 
     setFile(droppedFile);
@@ -162,7 +288,10 @@ export default function AuthenticityVerifier() {
         imageBase64 = await fileToBase64(file);
       } catch (b64Err) {
         console.error('Base64 conversion failed:', b64Err);
-        throw new Error('Failed to process image. Try a smaller file.');
+        const errorMsg = isMobile()
+          ? 'Failed to process image. Your device may have limited memory. Try a smaller image.'
+          : 'Failed to process image. Try a smaller file.';
+        throw new Error(errorMsg);
       }
 
       // Run all detectors in parallel with base64 data
@@ -176,6 +305,10 @@ export default function AuthenticityVerifier() {
         );
       } catch (detectErr) {
         console.error('Detection failed:', detectErr);
+        // If all detectors fail, show error to user
+        if (isMobile() && detectErr.message?.includes('memory')) {
+          throw new Error('Detection failed due to memory constraints. Please try a smaller image.');
+        }
         // Use empty results to still show a verdict
         detectorResults = [];
       }
@@ -195,7 +328,11 @@ export default function AuthenticityVerifier() {
 
     } catch (err) {
       console.error('Verification error:', err);
-      setError(err.message || 'Verification failed. Please try again.');
+      const errorMsg = err.message ||
+        (isMobile()
+          ? 'Verification failed. Mobile devices have memory limitations - try a smaller image.'
+          : 'Verification failed. Please try again.');
+      setError(errorMsg);
       setStage('idle');
     } finally {
       setLoading(false);
@@ -286,6 +423,11 @@ export default function AuthenticityVerifier() {
                 </svg>
                 <p className="text-lg mb-2">Drop an image here or click to upload</p>
                 <p className="text-sm">PNG, JPG, WebP supported</p>
+                {isMobile() && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    Recommended: Images under 5MB for best mobile performance
+                  </p>
+                )}
               </div>
             </label>
           </div>
@@ -352,6 +494,19 @@ export default function AuthenticityVerifier() {
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
               <strong>Error:</strong> {error}
+            </div>
+          )}
+
+          {/* Compression Indicator */}
+          {isCompressing && (
+            <div className="w-full py-3 px-6 rounded-lg font-medium text-white bg-blue-500">
+              <span className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Compressing image for mobile...
+              </span>
             </div>
           )}
 

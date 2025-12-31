@@ -3,12 +3,15 @@
  */
 
 import React from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
 import AuthenticityVerifier from './components/AuthenticityVerifier';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AuthenticityVerifier />
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        <AuthenticityVerifier />
+      </div>
+    </ErrorBoundary>
   );
 }
